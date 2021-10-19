@@ -1,0 +1,22 @@
+#+TITLE: Prometheus Usb Detection
+
+
+* Todo
+
+** TODO read stdin from udev
+*** TODO Does it need to be saved in some sort?
+** DONE UI Ask to plug dev in
+CLOSED: [2021-10-16 Sa 10:27]
+** TODO Timeout when waiting to long for pluggin in
+- unix timout [time] cmd: Using a limited time interval for inserting usb drive
+- time intervall started by pressing enter
+
+** DONE filter stdin
+CLOSED: [2021-10-16 Sa 10:27]
+- using strings package searching for keywords and slices
+- Before first subsystem=usb; the last product=; the text between = and \n
+
+** TODO register usb dev
+-
+** TODO Ask for device name
+- what should ... ? (the naming inside prometheus?)
