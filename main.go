@@ -11,7 +11,14 @@ type Config struct {
 }
 
 func main() {
-	fmt.Println("start")
+	fmt.Println("--- USB-DETECTION ---")
+
+	//test
+	/*
+		testdev := usbDevice{"5235", "dings"}
+		addUdevRule(testdev)
+		removeUdevRule(testdev)
+	*/
 
 	//read envvars
 	var config Config
@@ -38,5 +45,4 @@ func main() {
 		register(registerCmd)
 	}
 
-	//testi()
 }

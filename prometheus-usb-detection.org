@@ -3,11 +3,14 @@
 
 * Todo
 
-** TODO read stdin from udev
-*** TODO Does it need to be saved in some sort?
+** DONE read stdin from udev
+CLOSED: [2021-10-18 Mo 16:32]
+*** DONE Does it need to be saved in some sort?
+CLOSED: [2021-10-18 Mo 16:32]
 ** DONE UI Ask to plug dev in
 CLOSED: [2021-10-16 Sa 10:27]
-** TODO Timeout when waiting to long for pluggin in
+** DONE Timeout when waiting to long for pluggin in
+CLOSED: [2021-10-18 Mo 16:32]
 - unix timout [time] cmd: Using a limited time interval for inserting usb drive
 - time intervall started by pressing enter
 
@@ -16,7 +19,32 @@ CLOSED: [2021-10-16 Sa 10:27]
 - using strings package searching for keywords and slices
 - Before first subsystem=usb; the last product=; the text between = and \n
 
-** TODO register usb dev
+** DONE register usb dev
+CLOSED: [2021-10-18 Mo 16:39]
 -
-** TODO Ask for device name
+** DONE Ask for device name
+CLOSED: [2021-10-18 Mo 16:32]
 - what should ... ? (the naming inside prometheus?)
+
+** DONE Add register, add and remove flags
+CLOSED: [2021-10-19 Di 10:20]
+-
+
+** CANCELLED assign uuid to device as main id field, product number as property
+CLOSED: [2021-10-19 Di 09:45]
+:LOGBOOK:
+- State "CANCELLED"  from "TODO"       [2021-10-19 Di 09:45] \\
+  see comments
+:END:
+- is this even possible. im invoking the command with the product number. so i would have to somehow go from product number to uuid to device.
+- property number must be assumed to be unique
+
+
+
+** TODO increase usability of registering process including the usb insertion
+
+** TODO One file for all rules or individual files?
+
+** removeUsbDevice from rule file
+*** check if substring exists. Works without but there is no confirmation/information for user
+*** change file content to new string string
