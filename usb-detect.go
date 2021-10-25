@@ -20,7 +20,8 @@ type usbDevice struct {
 var devices = map[string]usbDevice{}
 
 func register(registerCmd *flag.FlagSet) {
-	registerCmd.Parse(os.Args[2:])
+
+	// registerCmd.Parse(os.Args[2:])
 
 	fmt.Println("==Register a usb device==")
 
@@ -79,8 +80,8 @@ func addUdevRule(newDevice usbDevice) {
 
 	// create rule string
 	rule :=
-		"ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", RUN+=\"/home/mrpeanutbutter/Documents/Projects/studienarbeit/implementation/core/monitoring/camera-on.sh\"\n" +
-			"ACTION==\"remove\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\",  RUN+=\"/home/mrpeanutbutter/Documents/Projects/studienarbeit/implementation/core/monitoring/camera-off.sh\""
+		"ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", RUN+=\"prometheus-usb-detection add \"" + newDevice.Id + "\"\"\n" +
+			"ACTION==\"remove\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\",  RUN+=\"prometheus-usb-detection add " + newDevice.Id + "\""
 
 	// check if string is already in file
 	bytes, err := os.ReadFile(pathRuleFile)
@@ -109,7 +110,14 @@ func addUdevRule(newDevice usbDevice) {
 		log.Fatal(err)
 		return
 	}
-
+	reloadUdevRules()
+}
+func reloadUdevRules() {
+	cmd := exec.Command("udevadm", "control", "--reload-rules", "&&", "udevadm", "trigger")
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalf("cmd.Run() failed with %s\n", err)
+	}
 }
 func removeUdevRule(oldDevice usbDevice) {
 	pathRuleFile := "/etc/udev/rules.d/85-usb-device.rules"
@@ -135,6 +143,9 @@ func removeUdevRule(oldDevice usbDevice) {
 			log.Fatal(err)
 			return
 		}
+
+		reloadUdevRules()
+
 		fmt.Println("Rule for device \"" + oldDevice.Name + "\" removed. (Id: \"" + oldDevice.Id + "\")")
 	}
 }
@@ -147,15 +158,22 @@ func fileExists(filename string) bool {
 }
 func addDevice(addCmd *flag.FlagSet, id *string) {
 	addCmd.Parse(os.Args[2:])
+	fmt.Println(os.Args[1])
+	fmt.Println(os.Args[2])
 
 	if *id == "" {
-		fmt.Print("ID is required")
+		fmt.Println("ID is required")
 		addCmd.PrintDefaults()
 		os.Exit(1)
 	}
 
 	addedDevice := devices[*id]
 	fmt.Println("The device ", addedDevice.Name, "has been plugged in")
+	cmd := exec.Command("touch", "/tmp/ttt/ttt")
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalf("cmd.Run() failed with %s\n", err)
+	}
 }
 
 func removeDevice(removeCmd *flag.FlagSet, id *string) {

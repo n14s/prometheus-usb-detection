@@ -45,6 +45,12 @@ CLOSED: [2021-10-19 Di 09:45]
 
 ** TODO One file for all rules or individual files?
 
-** removeUsbDevice from rule file
-*** check if substring exists. Works without but there is no confirmation/information for user
-*** change file content to new string string
+** TODO removeUsbDevice from rule file
+*** TODO check if substring exists. Works without but there is no confirmation/information for user
+*** TODO change file content to new string string
+*** TODO Cli interaction: what subcommand to use. use same subcommand with different flags for reg und unreg?
+
+** TODO How to abstract programm call in udev rule, from programm directory
+*** TODO Test using add to path
+- might not work due to sudo command?
+- udev rule fires without a command being called with sudo. in which environment is it firing?
