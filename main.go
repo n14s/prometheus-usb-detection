@@ -1,30 +1,36 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 )
 
 type Config struct {
-	someEnvVar string
+	PathDeviceFile     string
+	PathPrometheusFile string
 }
 
 var devices = map[string]usbDevice{}
+var pathRuleFile = "/etc/udev/rules.d/85-usb-device.rules"
+var appDir = getAppDir()
+var pathAppFile = appDir + "/prometheus-usb-detection"
+var pathDevicesFile = appDir + "/devices.json"
+var pathPrometheusFile = appDir + "/usb-device.prom"
 
 func main() {
 	fmt.Println("--- USB-DETECTION ---")
 
-	//test
-	/*
-		testdev := usbDevice{"5235", "dings"}
-		addUdevRule(testdev)
-		removeUdevRule(testdev)
-	*/
+	// initialize default Config Values
+	myConfig := Config{pathDevicesFile, pathPrometheusFile}
+
+	// read config from file
+	if fileExists("./config.json") {
+		myConfig = readConfig(myConfig)
+	}
 
 	//read envvars
-	var config Config
-	config.someEnvVar = os.Getenv("SOME_ENV")
 
 	// fill map with udevrule devices
 	readRegisteredDevices()
@@ -63,4 +69,18 @@ func isFlagPassed(name string) bool {
 		}
 	})
 	return found
+}
+
+func readConfig(myConfig Config) Config {
+
+	bytes, err := os.ReadFile("./config.json")
+	check(err)
+
+	defaultConfig := "{\"PathDeviceFile\":\"./devices.json\",\"PathPrometheusFile\":\"./usb-device.prom\"}"
+	err = json.Unmarshal(bytes, &myConfig)
+	if err != nil || string(bytes) == defaultConfig {
+		fmt.Println("true")
+		myConfig = Config{pathDevicesFile, pathPrometheusFile}
+	}
+	return myConfig
 }

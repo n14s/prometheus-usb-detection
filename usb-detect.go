@@ -19,16 +19,7 @@ type usbDevice struct {
 	Name string
 }
 
-var devices = map[string]usbDevice{}
-var pathRuleFile = "/etc/udev/rules.d/85-usb-device.rules"
-var appDir = getAppDir()
-var appFile = appDir + "/prometheus-usb-detection"
-var devicesFile = appDir + "/devices.json"
-var prometheusFile = appDir + "/usb-device.prom"
-
 func register(registerCmd *flag.FlagSet) {
-
-	// registerCmd.Parse(os.Args[2:])
 
 	fmt.Println("==Register a usb device==")
 
@@ -92,8 +83,8 @@ func addUdevRule(newDevice usbDevice) bool {
 
 	// create rule string
 	rule :=
-		"ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", RUN+=\"" + appFile + " updateState -add " + newDevice.Id + "\"\n" +
-			"ACTION==\"remove\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", RUN+=\"" + appFile + " updateState -remove " + newDevice.Id + "\""
+		"ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", RUN+=\"" + pathAppFile + " updateState -add " + newDevice.Id + "\"\n" +
+			"ACTION==\"remove\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", RUN+=\"" + pathAppFile + " updateState -remove " + newDevice.Id + "\""
 
 	// check if string is already in file
 	bytes, err := os.ReadFile(pathRuleFile)
@@ -203,13 +194,13 @@ func updateState(addCmd *flag.FlagSet, addID *string, removeID *string) {
 		}
 
 		// create or open rule file
-		f, err := os.OpenFile(prometheusFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f, err := os.OpenFile(pathPrometheusFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		check(err)
 
 		err = f.Close()
 		check(err)
 
-		input, err := ioutil.ReadFile(prometheusFile)
+		input, err := ioutil.ReadFile(pathPrometheusFile)
 		check(err)
 
 		lines := strings.Split(string(input), "\n")
@@ -232,13 +223,13 @@ func updateState(addCmd *flag.FlagSet, addID *string, removeID *string) {
 		}
 
 		output := strings.Join(lines, "\n")
-		err = ioutil.WriteFile(prometheusFile, []byte(output), 0644)
+		err = ioutil.WriteFile(pathPrometheusFile, []byte(output), 0644)
 		check(err)
 	}
 }
 
 func writeRegisteredDevices() {
-	f, err := os.OpenFile(devicesFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	f, err := os.OpenFile(pathDevicesFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	check(err)
 
 	bytes, err := json.Marshal(devices)
@@ -254,9 +245,8 @@ func writeRegisteredDevices() {
 func readRegisteredDevices() {
 	// read rule File
 
-	fmt.Println(devicesFile)
-	if fileExists(devicesFile) {
-		bytes, err := os.ReadFile(devicesFile)
+	if fileExists(pathDevicesFile) {
+		bytes, err := os.ReadFile(pathDevicesFile)
 		check(err)
 
 		err = json.Unmarshal(bytes, &devices)
