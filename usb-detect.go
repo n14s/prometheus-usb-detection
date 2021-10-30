@@ -18,6 +18,7 @@ type usbDevice struct {
 }
 
 var devices = map[string]usbDevice{}
+var pathRuleFile = "/etc/udev/rules.d/85-usb-device.rules"
 
 func register(registerCmd *flag.FlagSet) {
 
@@ -71,7 +72,6 @@ func getProductNumber() string {
 
 func addUdevRule(newDevice usbDevice) {
 	//create file or open file
-	pathRuleFile := "/etc/udev/rules.d/85-usb-device.rules"
 	f, err := os.OpenFile(pathRuleFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
@@ -80,8 +80,8 @@ func addUdevRule(newDevice usbDevice) {
 
 	// create rule string
 	rule :=
-		"ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", RUN+=\"prometheus-usb-detection add \"" + newDevice.Id + "\"\"\n" +
-			"ACTION==\"remove\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\",  RUN+=\"prometheus-usb-detection add " + newDevice.Id + "\""
+		"ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", ATTR{NAME}==\"" + newDevice.Name + "\", RUN+=\"prometheus-usb-detection add " + newDevice.Id + "\"\n" +
+			"ACTION==\"remove\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", ATTR{NAME}==\"" + newDevice.Name + "\", RUN+=\"prometheus-usb-detection add " + newDevice.Id + "\""
 
 	// check if string is already in file
 	bytes, err := os.ReadFile(pathRuleFile)
@@ -120,7 +120,6 @@ func reloadUdevRules() {
 	}
 }
 func removeUdevRule(oldDevice usbDevice) {
-	pathRuleFile := "/etc/udev/rules.d/85-usb-device.rules"
 	if !fileExists(pathRuleFile) {
 		fmt.Println("Can't remove usb device. Rule file does not exist.")
 	} else {
@@ -149,6 +148,7 @@ func removeUdevRule(oldDevice usbDevice) {
 		fmt.Println("Rule for device \"" + oldDevice.Name + "\" removed. (Id: \"" + oldDevice.Id + "\")")
 	}
 }
+
 func fileExists(filename string) bool {
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -156,36 +156,117 @@ func fileExists(filename string) bool {
 	}
 	return !info.IsDir()
 }
-func addDevice(addCmd *flag.FlagSet, id *string) {
-	addCmd.Parse(os.Args[2:])
-	fmt.Println(os.Args[1])
-	fmt.Println(os.Args[2])
 
-	if *id == "" {
-		fmt.Println("ID is required")
+func updateState(addCmd *flag.FlagSet, addID *string, removeID *string) {
+	prometheusFile := "./usb-device.prom"
+
+	if *addID == "" && *removeID == "" {
+		fmt.Println("No ID passed.")
 		addCmd.PrintDefaults()
 		os.Exit(1)
 	}
 
-	addedDevice := devices[*id]
-	fmt.Println("The device ", addedDevice.Name, "has been plugged in")
-	cmd := exec.Command("touch", "/tmp/ttt/ttt")
-	_, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
-	}
-}
-
-func removeDevice(removeCmd *flag.FlagSet, id *string) {
-	removeCmd.Parse(os.Args[2:])
-
-	if *id == "" {
-		fmt.Print("ID is required")
-		removeCmd.PrintDefaults()
+	if *addID != "" && *removeID != "" {
+		fmt.Println("Cannot add and remove at the same time.")
+		addCmd.PrintDefaults()
 		os.Exit(1)
 	}
 
-	removedDevice := devices[*id]
-	fmt.Println("The device ", removedDevice.Name, "has been plugged out")
+	ok := false
+	device := usbDevice{}
+	isUp := 0
+
+	if *addID != "" {
+		device, ok = devices[*addID]
+		isUp = 1
+	} else {
+		device, ok = devices[*removeID]
+		isUp = 0
+	}
+	//if *removeID != ""
+	if !ok {
+		fmt.Println("Device is not registered.")
+		addCmd.PrintDefaults()
+		os.Exit(1)
+	} else {
+		fmt.Println("The device", device.Name, "has been plugged in")
+
+		// create or open rule file
+		f, err := os.OpenFile(prometheusFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+
+		err = f.Close()
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+
+		input, err := ioutil.ReadFile(prometheusFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		lines := strings.Split(string(input), "\n")
+		found := false
+
+		for i, line := range lines {
+			if strings.Contains(line, device.Name) {
+				lines[i] = device.Name + " " + fmt.Sprint(isUp)
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			lines = append(lines, device.Name+" "+fmt.Sprint(isUp))
+		}
+
+		output := strings.Join(lines, "\n")
+		err = ioutil.WriteFile(prometheusFile, []byte(output), 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func readRegisteredDevices() {
+	// read rule File
+
+	if fileExists(pathRuleFile) {
+		file, _ := os.Open(pathRuleFile)
+		fileScanner := bufio.NewScanner(file)
+		i := 0
+		for fileScanner.Scan() {
+			if i == 1 {
+				i = 0
+			} else {
+				line := fileScanner.Text()
+
+				// searching product number
+				// Before first subsystem=usb; the last product=; the text between = and \n
+				pb := strings.Index(line, "ENV{PRODUCT}==")
+				pe := strings.LastIndex(line, "\", ATTR{NAME}==")
+				ne := strings.LastIndex(line, "\", RUN+=")
+
+				id := line[pb+15 : pe]
+				name := line[pe+16 : ne]
+
+				fmt.Println(id)
+				fmt.Println(name)
+
+				newDevice := usbDevice{id, name}
+				devices[newDevice.Id] = newDevice
+			}
+			i++
+		}
+
+		if err := fileScanner.Err(); err != nil {
+			log.Fatal(err)
+		}
+	}
 
 }

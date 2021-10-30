@@ -54,3 +54,10 @@ CLOSED: [2021-10-19 Di 09:45]
 *** TODO Test using add to path
 - might not work due to sudo command?
 - udev rule fires without a command being called with sudo. in which environment is it firing?
+
+** TODO Serialize instead of scanning manually
+*** TODO maybe use prometheus library, that offers writetotextfile()
+- is there a method to read from prom file to get most recent date?
+*** TODO make names unique so the prom file is actually enough to save state
+** TODO how to pick up state of device? prom file does not allow comments,  so id in comments is not possible
+** TODO on unregistering erase corresponding entry in .prom file

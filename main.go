@@ -24,14 +24,15 @@ func main() {
 	var config Config
 	config.someEnvVar = os.Getenv("SOME_ENV")
 
+	// fill map with udevrule devices
+	readRegisteredDevices()
+
 	// add subcommands
 	registerCmd := flag.NewFlagSet("register", flag.ExitOnError)
 
-	addCmd := flag.NewFlagSet("add", flag.ExitOnError)
-	addID := addCmd.String("add", "", "Tell Prometheus which device has been added")
-
-	removeCmd := flag.NewFlagSet("remove", flag.ExitOnError)
-	removeID := removeCmd.String("remove", "", "Tell prometheus which device has been removed")
+	updateStateCmd := flag.NewFlagSet("updateState", flag.ExitOnError)
+	addID := updateStateCmd.String("add", "", "Tell Prometheus which device has been added")
+	removeID := updateStateCmd.String("remove", "", "Tell prometheus which device has been removed")
 	// parse here of when opening command?
 	//flag.Parse()
 
@@ -42,10 +43,9 @@ func main() {
 		switch os.Args[1] {
 		case "register":
 			register(registerCmd)
-		case "add":
-			addDevice(addCmd, addID)
-		case "remove":
-			removeDevice(removeCmd, removeID)
+		case "updateState":
+			updateStateCmd.Parse(os.Args[2:])
+			updateState(updateStateCmd, addID, removeID)
 		default:
 			register(registerCmd)
 		}
