@@ -10,6 +10,8 @@ type Config struct {
 	someEnvVar string
 }
 
+var devices = map[string]usbDevice{}
+
 func main() {
 	fmt.Println("--- USB-DETECTION ---")
 

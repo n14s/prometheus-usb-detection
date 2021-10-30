@@ -61,3 +61,7 @@ CLOSED: [2021-10-19 Di 09:45]
 *** TODO make names unique so the prom file is actually enough to save state
 ** TODO how to pick up state of device? prom file does not allow comments,  so id in comments is not possible
 ** TODO on unregistering erase corresponding entry in .prom file
+** DONE updateState command must be run from same dir
+CLOSED: [2021-10-30 Sa 14:02]
+
+** Config file to allow custom paths for prom and device file

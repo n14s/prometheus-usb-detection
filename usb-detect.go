@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -19,6 +21,10 @@ type usbDevice struct {
 
 var devices = map[string]usbDevice{}
 var pathRuleFile = "/etc/udev/rules.d/85-usb-device.rules"
+var appDir = getAppDir()
+var appFile = appDir + "/prometheus-usb-detection"
+var devicesFile = appDir + "/devices.json"
+var prometheusFile = appDir + "/usb-device.prom"
 
 func register(registerCmd *flag.FlagSet) {
 
@@ -28,16 +34,24 @@ func register(registerCmd *flag.FlagSet) {
 
 	// interact with user
 	deviceName := getDeviceName()
-	fmt.Println(deviceName)
-	productNumber := getProductNumber()
-	fmt.Println(productNumber)
+	if containsValue(devices, deviceName) {
+		fmt.Println("Can't add device. Device has already been added")
+	} else {
+		productNumber := getProductNumber()
 
-	//reg device
-	newDevice := usbDevice{productNumber, deviceName}
-	devices[newDevice.Id] = newDevice
+		//reg device
+		newDevice := usbDevice{productNumber, deviceName}
+		devices[newDevice.Id] = newDevice
 
-	//add udev rule for device
-	addUdevRule(newDevice)
+		//add udev rule for device
+		alreadyExists := addUdevRule(newDevice)
+
+		// write to json if new
+		if !alreadyExists {
+			writeRegisteredDevices()
+		}
+	}
+
 }
 
 func getDeviceName() string {
@@ -70,36 +84,31 @@ func getProductNumber() string {
 	return productNumber
 }
 
-func addUdevRule(newDevice usbDevice) {
+func addUdevRule(newDevice usbDevice) bool {
+	alreadyExists := false
 	//create file or open file
 	f, err := os.OpenFile(pathRuleFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
+	check(err)
 
 	// create rule string
 	rule :=
-		"ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", ATTR{NAME}==\"" + newDevice.Name + "\", RUN+=\"prometheus-usb-detection add " + newDevice.Id + "\"\n" +
-			"ACTION==\"remove\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", ATTR{NAME}==\"" + newDevice.Name + "\", RUN+=\"prometheus-usb-detection add " + newDevice.Id + "\""
+		"ACTION==\"add\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", RUN+=\"" + appFile + " updateState -add " + newDevice.Id + "\"\n" +
+			"ACTION==\"remove\", SUBSYSTEM==\"usb\", ENV{PRODUCT}==\"" + newDevice.Id + "\", RUN+=\"" + appFile + " updateState -remove " + newDevice.Id + "\""
 
 	// check if string is already in file
 	bytes, err := os.ReadFile(pathRuleFile)
 	fileContent := string(bytes)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
+	check(err)
 
 	if strings.Contains(fileContent, newDevice.Id) {
 		fmt.Println("Can't add device. Device has already been added")
+		alreadyExists = true
 	} else {
 		// insert string in file
 		_, err = fmt.Fprintln(f, rule)
 		if err != nil {
 			log.Fatal(err)
 			f.Close()
-			return
 		}
 		fmt.Println("Rule for device \"" + newDevice.Name + "\" added. (Id: \"" + newDevice.Id + "\")")
 	}
@@ -108,9 +117,9 @@ func addUdevRule(newDevice usbDevice) {
 	err = f.Close()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	reloadUdevRules()
+	return alreadyExists
 }
 func reloadUdevRules() {
 	cmd := exec.Command("udevadm", "control", "--reload-rules", "&&", "udevadm", "trigger")
@@ -158,8 +167,6 @@ func fileExists(filename string) bool {
 }
 
 func updateState(addCmd *flag.FlagSet, addID *string, removeID *string) {
-	prometheusFile := "./usb-device.prom"
-
 	if *addID == "" && *removeID == "" {
 		fmt.Println("No ID passed.")
 		addCmd.PrintDefaults()
@@ -189,26 +196,21 @@ func updateState(addCmd *flag.FlagSet, addID *string, removeID *string) {
 		addCmd.PrintDefaults()
 		os.Exit(1)
 	} else {
-		fmt.Println("The device", device.Name, "has been plugged in")
+		if isUp == 1 {
+			fmt.Println("The device", device.Name, "has been plugged in")
+		} else {
+			fmt.Println("The device", device.Name, "has been plugged out")
+		}
 
 		// create or open rule file
 		f, err := os.OpenFile(prometheusFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
+		check(err)
 
 		err = f.Close()
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
+		check(err)
 
 		input, err := ioutil.ReadFile(prometheusFile)
-		if err != nil {
-			log.Fatal(err)
-		}
+		check(err)
 
 		lines := strings.Split(string(input), "\n")
 		found := false
@@ -222,51 +224,65 @@ func updateState(addCmd *flag.FlagSet, addID *string, removeID *string) {
 		}
 
 		if !found {
-			lines = append(lines, device.Name+" "+fmt.Sprint(isUp))
+			if lines[0] == "" {
+				lines[0] = device.Name + " " + fmt.Sprint(isUp)
+			} else {
+				lines = append(lines, device.Name+" "+fmt.Sprint(isUp))
+			}
 		}
 
 		output := strings.Join(lines, "\n")
 		err = ioutil.WriteFile(prometheusFile, []byte(output), 0644)
-		if err != nil {
-			log.Fatal(err)
-		}
+		check(err)
 	}
 }
 
+func writeRegisteredDevices() {
+	f, err := os.OpenFile(devicesFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	check(err)
+
+	bytes, err := json.Marshal(devices)
+	jsonString := string(bytes)
+	check(err)
+
+	f.WriteString(jsonString)
+
+	err = f.Close()
+	check(err)
+
+}
 func readRegisteredDevices() {
 	// read rule File
 
-	if fileExists(pathRuleFile) {
-		file, _ := os.Open(pathRuleFile)
-		fileScanner := bufio.NewScanner(file)
-		i := 0
-		for fileScanner.Scan() {
-			if i == 1 {
-				i = 0
-			} else {
-				line := fileScanner.Text()
+	fmt.Println(devicesFile)
+	if fileExists(devicesFile) {
+		bytes, err := os.ReadFile(devicesFile)
+		check(err)
 
-				// searching product number
-				// Before first subsystem=usb; the last product=; the text between = and \n
-				pb := strings.Index(line, "ENV{PRODUCT}==")
-				pe := strings.LastIndex(line, "\", ATTR{NAME}==")
-				ne := strings.LastIndex(line, "\", RUN+=")
-
-				id := line[pb+15 : pe]
-				name := line[pe+16 : ne]
-
-				fmt.Println(id)
-				fmt.Println(name)
-
-				newDevice := usbDevice{id, name}
-				devices[newDevice.Id] = newDevice
-			}
-			i++
-		}
-
-		if err := fileScanner.Err(); err != nil {
-			log.Fatal(err)
-		}
+		err = json.Unmarshal(bytes, &devices)
+		check(err)
 	}
 
+}
+func check(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func containsValue(m map[string]usbDevice, v string) bool {
+	for _, x := range m {
+		if x.Name == v {
+			return true
+		}
+	}
+	return false
+}
+
+func getAppDir() string {
+	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return dir
 }
