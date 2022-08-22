@@ -44,7 +44,7 @@ func main() {
 	// parse here of when opening command?
 	//flag.Parse()
 
-	// if args < 1 default to register asd aasd
+	// if args < 1 default to register
 	if len(os.Args) <= 1 {
 		register(registerCmd)
 	} else {
